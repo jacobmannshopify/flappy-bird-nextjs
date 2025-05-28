@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { soundManager } from '@/lib/soundManager';
+import { DayNightCycle } from '../../lib/dayNightCycle';
 
 interface GameHUDProps {
   score: number;
@@ -9,6 +10,8 @@ interface GameHUDProps {
   gameTime: number;
   fps: number;
   pipesCleared: number;
+  gameStarted: boolean;
+  gameOver: boolean;
   className?: string;
 }
 
@@ -18,12 +21,16 @@ const GameHUD: React.FC<GameHUDProps> = ({
   gameTime,
   fps,
   pipesCleared,
+  gameStarted,
+  gameOver,
   className = ''
 }) => {
   const [previousScore, setPreviousScore] = useState(score);
   const [scoreAnimation, setScoreAnimation] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [lastMilestoneScore, setLastMilestoneScore] = useState(0);
+  const dayNightCycle = new DayNightCycle();
+  const timeInfo = dayNightCycle.getCurrentTimeInfo(score);
 
   useEffect(() => {
     // Entrance animation
@@ -196,6 +203,29 @@ const GameHUD: React.FC<GameHUDProps> = ({
         <div className="absolute top-24 left-1/2 transform -translate-x-1/2 animate-bounce">
           <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-white px-4 py-2 rounded-lg shadow-lg">
             <p className="text-lg font-bold">🎉 NEW HIGH SCORE!</p>
+          </div>
+        </div>
+      )}
+
+      {/* Day/Night Cycle Indicator */}
+      {gameStarted && (
+        <div className="absolute top-4 left-4 text-white z-10 pointer-events-none">
+          <div className="bg-black/30 backdrop-blur-sm rounded-lg p-3 mb-2">
+            <div className="text-sm opacity-75 mb-1">Time of Day</div>
+            <div className="flex items-center gap-2">
+              <div className="text-lg font-semibold">
+                {timeInfo.name === 'Dawn' && '🌅'}
+                {timeInfo.name === 'Day' && '☀️'}
+                {timeInfo.name === 'Sunset' && '🌇'}
+                {timeInfo.name === 'Night' && '🌙'}
+                {timeInfo.name}
+              </div>
+            </div>
+            {timeInfo.pointsUntilNext > 0 && (
+              <div className="text-xs opacity-60 mt-1">
+                {timeInfo.pointsUntilNext} points until next phase
+              </div>
+            )}
           </div>
         </div>
       )}

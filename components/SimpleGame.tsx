@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import PerformanceMonitor from './PerformanceMonitor';
+import { DayNightCycle } from '../lib/dayNightCycle';
 
 interface Bird {
   x: number;
@@ -45,12 +47,27 @@ const SimpleGame = () => {
   const [scorePopups, setScorePopups] = useState<ScorePopup[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [touchFeedback, setTouchFeedback] = useState<{x: number, y: number, opacity: number} | null>(null);
+  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(true);
+  
+  // Performance and quality settings
+  const [qualitySettings, setQualitySettings] = useState({
+    particleMultiplier: 1.0,
+    enableShadows: true,
+    enableGradients: true,
+    maxParticles: 50,
+    adaptiveQuality: true
+  });
   
   const animationRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const deathAnimationStartRef = useRef<number | null>(null);
   const touchFeedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fpsHistoryRef = useRef<number[]>([]);
+  const lastFpsCheckRef = useRef<number>(Date.now());
+  const groundOffsetRef = useRef<number>(0);
+  const cloudOffsetRef = useRef<number>(0);
+  const dayNightCycleRef = useRef<DayNightCycle>(new DayNightCycle());
   
   // Pre-calculate grass positions to avoid expensive random generation every frame
   const grassPositions = useRef<{x: number, heights: number[]}[]>([]);
@@ -75,12 +92,14 @@ const SimpleGame = () => {
     grassPositions.current = grass;
   }, []);
 
-  // Game constants - Adjusted for better gameplay
-  const GRAVITY = 0.6;
-  const JUMP_FORCE = -8;         // Reduced from -10 to -8 (even less sensitive flapping)
-  const PIPE_WIDTH = 60;
+  // Game constants - adjusted to match previous version's feel
+  const GRAVITY = 0.3;                // Reduced from 0.6 to match original
+  const JUMP_FORCE = -4.5;            // Reduced from -8 to match original sensitivity
+  const BIRD_SIZE = 30;
+  const PIPE_WIDTH = 80;
+  const PIPE_SPEED = 2.5;             // Kept the same as it felt good
   const PIPE_GAP = 180;
-  const PIPE_SPEED = 2.5;        // Reduced from 3.5 to 2.5 (more comfortable scrolling)
+  const GROUND_HEIGHT = 120;
   
   // Mobile-responsive canvas dimensions
   const getCanvasDimensions = () => {
@@ -207,45 +226,6 @@ const SimpleGame = () => {
     setScorePopups(prev => [...prev, popup]);
   }, []);
 
-  const createParticles = useCallback((x: number, y: number, count: number = 8) => {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F'];
-    const newParticles: Particle[] = [];
-    
-    // Reduce particle count on mobile for performance
-    const particleCount = isMobile ? Math.floor(count * 0.6) : count;
-    
-    for (let i = 0; i < particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / particleCount + Math.random() * 0.5;
-      const speed = Math.random() * 3 + 2;
-      
-      newParticles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1, // Slight upward bias
-        life: 1,
-        maxLife: Math.random() * 60 + 30, // 30-90 frames
-        color: colors[Math.floor(Math.random() * colors.length)],
-        size: Math.random() * 4 + 2
-      });
-    }
-    
-    setParticles(prev => [...prev, ...newParticles]);
-  }, [isMobile]);
-
-  // Touch feedback animation
-  const createTouchFeedback = useCallback((x: number, y: number) => {
-    if (touchFeedbackTimeoutRef.current) {
-      clearTimeout(touchFeedbackTimeoutRef.current);
-    }
-
-    setTouchFeedback({ x, y, opacity: 1 });
-    
-    touchFeedbackTimeoutRef.current = setTimeout(() => {
-      setTouchFeedback(null);
-    }, 300);
-  }, []);
-
   // Haptic feedback for mobile devices
   const triggerHapticFeedback = useCallback((type: 'light' | 'medium' | 'heavy' = 'light') => {
     if ('vibrate' in navigator) {
@@ -262,6 +242,96 @@ const SimpleGame = () => {
       }
     }
   }, []);
+
+  // Adaptive quality management
+  const updateQualitySettings = useCallback((currentFps: number) => {
+    if (!qualitySettings.adaptiveQuality) return;
+
+    // Add FPS to history
+    fpsHistoryRef.current.push(currentFps);
+    if (fpsHistoryRef.current.length > 30) { // Keep last 30 FPS readings
+      fpsHistoryRef.current.shift();
+    }
+
+    // Only adjust quality every 3 seconds to avoid constant changes
+    const now = Date.now();
+    if (now - lastFpsCheckRef.current < 3000) return;
+    lastFpsCheckRef.current = now;
+
+    if (fpsHistoryRef.current.length < 10) return; // Need some history
+
+    const avgFps = fpsHistoryRef.current.reduce((a, b) => a + b, 0) / fpsHistoryRef.current.length;
+
+    setQualitySettings(prev => {
+      const newSettings = { ...prev };
+      
+      // Poor performance: reduce quality
+      if (avgFps < 45) {
+        newSettings.particleMultiplier = Math.max(0.3, prev.particleMultiplier - 0.1);
+        newSettings.maxParticles = Math.max(10, prev.maxParticles - 5);
+        newSettings.enableShadows = avgFps > 35; // Disable shadows if very poor
+        newSettings.enableGradients = avgFps > 30; // Disable gradients if extremely poor
+      }
+      // Good performance: increase quality back up
+      else if (avgFps > 55) {
+        newSettings.particleMultiplier = Math.min(1.0, prev.particleMultiplier + 0.05);
+        newSettings.maxParticles = Math.min(50, prev.maxParticles + 2);
+        newSettings.enableShadows = true;
+        newSettings.enableGradients = true;
+      }
+
+      // Only update if there's actually a change
+      return JSON.stringify(newSettings) !== JSON.stringify(prev) ? newSettings : prev;
+    });
+  }, [qualitySettings.adaptiveQuality]);
+
+  // Enhanced particle creation with quality settings
+  const createParticles = useCallback((x: number, y: number, count: number = 8) => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F'];
+    const newParticles: Particle[] = [];
+    
+    // Apply quality settings to particle count
+    let adjustedCount = count * qualitySettings.particleMultiplier;
+    if (isMobile) adjustedCount *= 0.6; // Additional mobile reduction
+    adjustedCount = Math.floor(Math.min(adjustedCount, qualitySettings.maxParticles - particles.length));
+    
+    for (let i = 0; i < adjustedCount; i++) {
+      const angle = (Math.PI * 2 * i) / adjustedCount + Math.random() * 0.5;
+      const speed = Math.random() * 3 + 2;
+      
+      newParticles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1, // Slight upward bias
+        life: 1,
+        maxLife: Math.random() * 60 + 30, // 30-90 frames
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: Math.random() * 4 + 2
+      });
+    }
+    
+    setParticles(prev => [...prev, ...newParticles]);
+  }, [isMobile, qualitySettings.particleMultiplier, qualitySettings.maxParticles, particles.length]);
+
+  // Touch feedback animation
+  const createTouchFeedback = useCallback((x: number, y: number) => {
+    if (touchFeedbackTimeoutRef.current) {
+      clearTimeout(touchFeedbackTimeoutRef.current);
+    }
+
+    setTouchFeedback({ x, y, opacity: 1 });
+    
+    touchFeedbackTimeoutRef.current = setTimeout(() => {
+      setTouchFeedback(null);
+    }, 300);
+  }, []);
+
+  // Performance tracking for FPS monitoring
+  const trackPerformance = useCallback((deltaTime: number) => {
+    const fps = 1000 / deltaTime;
+    updateQualitySettings(fps);
+  }, [updateQualitySettings]);
 
   const updateAnimations = useCallback((currentTime: number) => {
     // Consolidate all animation updates into a single state update to reduce re-renders
@@ -377,6 +447,11 @@ const SimpleGame = () => {
   const gameLoop = useCallback((currentTime: number) => {
     const deltaTime = currentTime - lastTimeRef.current;
     lastTimeRef.current = currentTime;
+
+    // Track performance
+    if (deltaTime > 0) {
+      trackPerformance(deltaTime);
+    }
 
     // Update animations only when game is running
     if (gameStarted && !gameOver) {
@@ -498,22 +573,32 @@ const SimpleGame = () => {
     if (canvas) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Create beautiful gradient background
-        const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-        gradient.addColorStop(0, '#87CEEB');    // Sky blue at top
-        gradient.addColorStop(0.7, '#98E4FF');  // Lighter blue
-        gradient.addColorStop(1, '#B8F2FF');    // Very light blue at horizon
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        // Update ground offset for scrolling effect
+        groundOffsetRef.current = (groundOffsetRef.current + PIPE_SPEED) % CANVAS_WIDTH;
+        
+        // Update cloud offset for parallax effect (slower than ground)
+        cloudOffsetRef.current += PIPE_SPEED * 0.3;
 
-        // Add some cloud-like shapes for atmosphere
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.beginPath();
-        ctx.ellipse(150, 100, 40, 20, 0, 0, 2 * Math.PI);
-        ctx.ellipse(200, 120, 50, 25, 0, 0, 2 * Math.PI);
-        ctx.ellipse(500, 80, 35, 18, 0, 0, 2 * Math.PI);
-        ctx.ellipse(650, 110, 45, 22, 0, 0, 2 * Math.PI);
-        ctx.fill();
+        // Clear canvas
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Draw dynamic sky with day/night cycle
+        dayNightCycleRef.current.drawSky(
+          ctx, 
+          CANVAS_WIDTH, 
+          CANVAS_HEIGHT, 
+          score, 
+          GROUND_HEIGHT
+        );
+
+        // Draw clouds with parallax effect
+        dayNightCycleRef.current.drawClouds(
+          ctx, 
+          CANVAS_WIDTH, 
+          CANVAS_HEIGHT, 
+          score, 
+          cloudOffsetRef.current
+        );
 
         // Draw enhanced ground with gradient
         const groundGradient = ctx.createLinearGradient(0, CANVAS_HEIGHT - 100, 0, CANVAS_HEIGHT);
@@ -534,18 +619,24 @@ const SimpleGame = () => {
 
         // Draw enhanced pipes with 3D effect
         pipes.forEach(pipe => {
-          // Pipe shadow for depth
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-          ctx.fillRect(pipe.x + 3, 3, PIPE_WIDTH, pipe.gapY);
-          ctx.fillRect(pipe.x + 3, pipe.gapY + PIPE_GAP + 3, PIPE_WIDTH, CANVAS_HEIGHT - pipe.gapY - PIPE_GAP - 100);
+          // Pipe shadow for depth (only if quality allows)
+          if (qualitySettings.enableShadows) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(pipe.x + 3, 3, PIPE_WIDTH, pipe.gapY);
+            ctx.fillRect(pipe.x + 3, pipe.gapY + PIPE_GAP + 3, PIPE_WIDTH, CANVAS_HEIGHT - pipe.gapY - PIPE_GAP - 100);
+          }
 
-          // Main pipe gradient
-          const pipeGradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + PIPE_WIDTH, 0);
-          pipeGradient.addColorStop(0, '#228B22');   // Forest green
-          pipeGradient.addColorStop(0.3, '#32CD32'); // Lime green
-          pipeGradient.addColorStop(0.7, '#228B22'); // Forest green
-          pipeGradient.addColorStop(1, '#006400');   // Dark green
-          ctx.fillStyle = pipeGradient;
+          // Main pipe gradient (or solid color for performance)
+          if (qualitySettings.enableGradients) {
+            const pipeGradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + PIPE_WIDTH, 0);
+            pipeGradient.addColorStop(0, '#228B22');   // Forest green
+            pipeGradient.addColorStop(0.3, '#32CD32'); // Lime green
+            pipeGradient.addColorStop(0.7, '#228B22'); // Forest green
+            pipeGradient.addColorStop(1, '#006400');   // Dark green
+            ctx.fillStyle = pipeGradient;
+          } else {
+            ctx.fillStyle = '#228B22'; // Solid color for performance
+          }
           
           // Top pipe
           ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.gapY);
@@ -568,30 +659,37 @@ const SimpleGame = () => {
         // Draw enhanced bird with gradient and shadow
         ctx.save();
         
-        // Bird shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(bird.x + 2, bird.y + 2, 20, 20);
+        // Bird shadow (only if quality allows)
+        if (qualitySettings.enableShadows) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+          ctx.fillRect(bird.x + 2, bird.y + 2, 20, 20);
+        }
         
         // Apply rotation for bird
         ctx.translate(bird.x + 10, bird.y + 10);
         ctx.rotate(bird.rotation);
         ctx.translate(-10, -10);
         
-        // Main bird body gradient
-        const birdGradient = ctx.createRadialGradient(
-          10, 8, 2,  // Inner circle (highlight)
-          10, 10, 15 // Outer circle
-        );
-        if (bird.isAlive) {
-          birdGradient.addColorStop(0, '#FFD700');  // Bright gold center
-          birdGradient.addColorStop(0.7, '#FFA500'); // Orange mid
-          birdGradient.addColorStop(1, '#FF8C00');   // Dark orange edge
+        // Main bird body gradient (or solid color for performance)
+        if (qualitySettings.enableGradients) {
+          const birdGradient = ctx.createRadialGradient(
+            10, 8, 2,  // Inner circle (highlight)
+            10, 10, 15 // Outer circle
+          );
+          if (bird.isAlive) {
+            birdGradient.addColorStop(0, '#FFD700');  // Bright gold center
+            birdGradient.addColorStop(0.7, '#FFA500'); // Orange mid
+            birdGradient.addColorStop(1, '#FF8C00');   // Dark orange edge
+          } else {
+            birdGradient.addColorStop(0, '#FF6B6B');  // Light red center
+            birdGradient.addColorStop(0.7, '#FF4444'); // Medium red
+            birdGradient.addColorStop(1, '#CC0000');   // Dark red edge
+          }
+          ctx.fillStyle = birdGradient;
         } else {
-          birdGradient.addColorStop(0, '#FF6B6B');  // Light red center
-          birdGradient.addColorStop(0.7, '#FF4444'); // Medium red
-          birdGradient.addColorStop(1, '#CC0000');   // Dark red edge
+          // Solid colors for performance
+          ctx.fillStyle = bird.isAlive ? '#FFA500' : '#FF4444';
         }
-        ctx.fillStyle = birdGradient;
         ctx.fillRect(0, 0, 20, 20);
 
         // Bird eye
@@ -671,6 +769,31 @@ const SimpleGame = () => {
         ctx.fillStyle = '#FFF';
         ctx.font = 'bold 28px Arial';
         ctx.fillText(`Score: ${score}`, 20, 40);
+
+        // Day/Night Cycle indicator (only when game is running)
+        if (gameStarted && !gameOver) {
+          const timeInfo = dayNightCycleRef.current.getCurrentTimeInfo(score);
+          
+          // Time display background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.font = 'bold 18px Arial';
+          ctx.fillText(`${timeInfo.name === 'Dawn' ? '🌅' : timeInfo.name === 'Day' ? '☀️' : timeInfo.name === 'Sunset' ? '🌇' : '🌙'} ${timeInfo.name}`, 22, 72);
+          
+          ctx.fillStyle = '#FFF';
+          ctx.font = 'bold 18px Arial';
+          ctx.fillText(`${timeInfo.name === 'Dawn' ? '🌅' : timeInfo.name === 'Day' ? '☀️' : timeInfo.name === 'Sunset' ? '🌇' : '🌙'} ${timeInfo.name}`, 20, 70);
+          
+          // Points until next phase (if applicable)
+          if (timeInfo.pointsUntilNext > 0) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.font = '12px Arial';
+            ctx.fillText(`${timeInfo.pointsUntilNext} pts to next`, 22, 92);
+            
+            ctx.fillStyle = '#FFF';
+            ctx.font = '12px Arial';
+            ctx.fillText(`${timeInfo.pointsUntilNext} pts to next`, 20, 90);
+          }
+        }
 
         // Enhanced game state overlays
         if (!gameStarted) {
@@ -836,8 +959,23 @@ const SimpleGame = () => {
         <div className="mt-4 text-gray-600">
           <p>Click canvas or press SPACE to flap</p>
           <p>Score: {score}</p>
+          <button
+            onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
+            className="mt-2 px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors"
+          >
+            {showPerformanceMonitor ? 'Hide' : 'Show'} Performance
+          </button>
         </div>
       </div>
+      
+      {/* Performance Monitor */}
+      <PerformanceMonitor
+        particleCount={particles.length}
+        gameObjects={pipes.length + (bird ? 1 : 0)}
+        canvasWidth={CANVAS_WIDTH}
+        canvasHeight={CANVAS_HEIGHT}
+        isVisible={showPerformanceMonitor}
+      />
     </div>
   );
 };
