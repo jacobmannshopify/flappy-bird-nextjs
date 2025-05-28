@@ -42,7 +42,8 @@ export const LAYERS = {
   PIPES: 1,
   GROUND: 2,
   BIRD: 3,
-  UI: 4,
+  PARTICLES: 4,
+  UI: 5,
 } as const;
 
 // Game timing constants
@@ -92,6 +93,37 @@ export const ANIMATION = {
   BIRD_FLAP_SPEED: 0.2,
   DEATH_ROTATION_SPEED: 0.3,
   UI_FADE_SPEED: 0.05,
+  
+  // Death animation
+  DEATH_DURATION: 2000,
+  DEATH_ROTATION_MULTIPLIER: 3,
+  
+  // Score popup
+  SCORE_POPUP_DURATION: 1500,
+  SCORE_POPUP_RISE_SPEED: 2,
+  SCORE_POPUP_SCALE_MAX: 1.2,
+  
+  // Screen flash
+  SCREEN_FLASH_DURATION: 300,
+  SCREEN_FLASH_INTENSITY: 0.4,
+  
+  // Particle system
+  COLLISION_PARTICLES: 15,
+  SCORE_PARTICLES: 8,
+  PARTICLE_LIFE_MIN: 600,
+  PARTICLE_LIFE_MAX: 1500,
+  PARTICLE_SIZE_MIN: 2,
+  PARTICLE_SIZE_MAX: 8,
+  PARTICLE_SPEED_MIN: 1,
+  PARTICLE_SPEED_MAX: 8,
+  PARTICLE_GRAVITY: 0.15,
+} as const;
+
+// Particle colors
+export const PARTICLE_COLORS = {
+  COLLISION: ['#ff6b6b', '#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'],
+  CELEBRATION: ['#00d2d3', '#ff9f43', '#55a3ff', '#26de81'],
+  SPARKLE: ['#ffffff', '#ffeb3b', '#03dac6'],
 } as const;
 
 // Development and debugging
@@ -100,4 +132,5 @@ export const DEBUG = {
   SHOW_FPS: true,
   LOG_PHYSICS: false,
   INVINCIBLE_MODE: false,
+  SHOW_ANIMATION_DEBUG: false,
 } as const; 

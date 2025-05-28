@@ -7,6 +7,7 @@ import { useGameStore, useGameActions, useGameMode, useScore, useHighScore } fro
 import { spriteManager, SpriteRenderer } from '@/lib/spriteManager';
 import { backgroundManager } from '@/lib/backgroundManager';
 import { soundManager } from '@/lib/soundManager';
+import { animationManager } from '@/lib/animationManager';
 import { COLORS } from '@/constants/game';
 
 // Import UI Components
@@ -34,10 +35,12 @@ const Game: React.FC<GameProps> = ({
   const highScore = useHighScore();
   const actions = useGameActions();
   
-  // Add ref to track previous score for scoring sound
+  // Add ref to track previous score for scoring sound and animations
   const previousScoreRef = useRef(score);
-  // Add ref to track previous bird alive state for collision sound
+  // Add ref to track previous bird alive state for collision sound and animations
   const prevBirdAliveRef = useRef(true);
+  // Add ref to track if death animation has been triggered
+  const deathAnimationTriggeredRef = useRef(false);
   
   // Get the full game state for rendering
   const bird = useGameStore((state: any) => state.bird);
@@ -93,24 +96,58 @@ const Game: React.FC<GameProps> = ({
     };
   }, []);
 
-  // Add sound effect when score changes (bird passes pipes)
+  // Add sound effect and score popup animation when score changes
   useEffect(() => {
     if (score > previousScoreRef.current && isGameRunning) {
       soundManager.playSound('score');
+      
+      // Create score popup animation
+      const pipePosition = { x: bird.x + 100, y: bird.y };
+      animationManager.createScorePopup(pipePosition, score - previousScoreRef.current);
+      
+      // Create celebration particle effect
+      animationManager.createScoreExplosion(pipePosition);
+      
       previousScoreRef.current = score;
     } else {
       previousScoreRef.current = score;
     }
-  }, [score, isGameRunning]);
+  }, [score, isGameRunning, bird.x, bird.y]);
 
-  // Add sound effect when bird dies (collision)
+  // Add sound effect and death animation when bird dies
   useEffect(() => {
     if (prevBirdAliveRef.current && !bird.isAlive) {
       soundManager.playSound('collision');
+      
+      // Trigger screen flash effect
+      animationManager.createScreenFlash('#ff0000', 300, 0.4);
+      
+      // Create collision particle explosion
+      animationManager.createCollisionExplosion({ x: bird.x, y: bird.y });
+      
+      // Start death animation
+      if (!deathAnimationTriggeredRef.current) {
+        animationManager.startDeathAnimation(bird.rotation);
+        deathAnimationTriggeredRef.current = true;
+      }
     }
     
     prevBirdAliveRef.current = bird.isAlive;
-  }, [bird.isAlive]);
+  }, [bird.isAlive, bird.x, bird.y, bird.rotation]);
+
+  // Reset death animation trigger when game restarts
+  useEffect(() => {
+    if (gameMode === 'playing' && bird.isAlive) {
+      deathAnimationTriggeredRef.current = false;
+    }
+  }, [gameMode, bird.isAlive]);
+
+  // Clear animations when starting new game
+  useEffect(() => {
+    if (gameMode === 'playing') {
+      animationManager.clear();
+    }
+  }, [gameMode]);
 
   // Game update callback for the game loop
   const gameUpdate = useCallback((deltaTime: number, totalTime: number) => {
@@ -137,6 +174,9 @@ const Game: React.FC<GameProps> = ({
 
     // Update sprite animations
     spriteManager.updateAnimations(totalTime);
+
+    // Update animation system
+    animationManager.update(deltaTime, totalTime);
 
     // Clear canvas
     context.clearRect(0, 0, actualWidth, actualHeight);
@@ -182,8 +222,15 @@ const Game: React.FC<GameProps> = ({
     // Determine bird animation state and draw bird with sprite
     let birdSpriteId = 'bird-idle';
     let shouldAnimate = false;
+    let birdRotation = bird.rotation;
+    let birdAlpha = bird.isAlive ? 1 : 0.7;
 
-    if (!bird.isAlive) {
+    // Get death animation data if active
+    const deathAnimData = animationManager.getDeathAnimationData();
+    if (deathAnimData && !bird.isAlive) {
+      birdRotation = deathAnimData.rotation;
+      birdSpriteId = 'bird-dead';
+    } else if (!bird.isAlive) {
       birdSpriteId = 'bird-dead';
     } else if (bird.velocity < -2) {
       birdSpriteId = 'bird-flap';
@@ -213,12 +260,13 @@ const Game: React.FC<GameProps> = ({
         y: bird.y,
         width: 24,
         height: 24,
-        rotation: bird.rotation,
-        alpha: bird.isAlive ? 1 : 0.7
+        rotation: birdRotation,
+        alpha: birdAlpha
       });
     }
 
-    // Note: UI rendering is now handled by React components, not canvas
+    // Render all animations (particles, score popups, screen flash)
+    animationManager.render(context, actualWidth, actualHeight);
 
   }, [context, isReady, actualWidth, actualHeight, bird, pipes, score, highScore, gameMode, isPaused, isGameRunning, actions]);
 

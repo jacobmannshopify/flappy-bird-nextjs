@@ -97,4 +97,85 @@ export interface RenderState {
   pipes: Pipe[];
   score: number;
   gameState: GameMode;
+}
+
+// Animation system types
+export interface AnimationConfig {
+  duration: number;
+  easing?: EasingFunction;
+  delay?: number;
+  loop?: boolean;
+  autoStart?: boolean;
+}
+
+export type EasingFunction = (t: number) => number;
+
+export interface Animation {
+  id: string;
+  startTime: number;
+  duration: number;
+  easing: EasingFunction;
+  isActive: boolean;
+  isComplete: boolean;
+  onUpdate?: (progress: number, value: any) => void;
+  onComplete?: () => void;
+}
+
+// Particle system types
+export interface Particle extends Position {
+  id: string;
+  velocity: { x: number; y: number };
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+  alpha: number;
+  gravity?: number;
+  rotation?: number;
+  rotationSpeed?: number;
+}
+
+export interface ParticleEmitterConfig {
+  position: Position;
+  particleCount: number;
+  speed: { min: number; max: number };
+  angle: { min: number; max: number };
+  life: { min: number; max: number };
+  size: { min: number; max: number };
+  colors: string[];
+  gravity?: number;
+  burst?: boolean;
+}
+
+// Score popup animation
+export interface ScorePopup extends Position {
+  id: string;
+  value: number;
+  startTime: number;
+  duration: number;
+  isActive: boolean;
+  alpha: number;
+  scale: number;
+}
+
+// Screen flash effect
+export interface ScreenFlash {
+  isActive: boolean;
+  startTime: number;
+  duration: number;
+  color: string;
+  alpha: number;
+  intensity: number;
+}
+
+// Death animation state
+export interface DeathAnimation {
+  isActive: boolean;
+  startTime: number;
+  duration: number;
+  initialRotation: number;
+  targetRotation: number;
+  fallSpeed: number;
+  bounceHeight?: number;
+  hasBounced?: boolean;
 } 
