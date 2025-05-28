@@ -4,6 +4,7 @@ import { useEffect, useCallback } from 'react';
 import { useCanvas } from '@/hooks/useCanvas';
 import { useGameLoop } from '@/hooks/useGameLoop';
 import { useGameStore, useGameActions, useGameMode, useScore, useHighScore } from '@/lib/gameStore';
+import { spriteManager, SpriteRenderer } from '@/lib/spriteManager';
 import { COLORS } from '@/constants/game';
 
 // TypeScript interfaces for component props
@@ -47,6 +48,11 @@ const Game: React.FC<GameProps> = ({
     enableHighDPI: true
   });
 
+  // Initialize sprites when component mounts
+  useEffect(() => {
+    spriteManager.initializeGameSprites();
+  }, []);
+
   // Game update callback for the game loop
   const gameUpdate = useCallback((deltaTime: number, totalTime: number) => {
     if (!context || !isReady) return;
@@ -60,6 +66,9 @@ const Game: React.FC<GameProps> = ({
     // Update pipes
     actions.updatePipes(deltaTime);
 
+    // Update sprite animations
+    spriteManager.updateAnimations(totalTime);
+
     // Clear canvas
     context.clearRect(0, 0, actualWidth, actualHeight);
 
@@ -67,52 +76,129 @@ const Game: React.FC<GameProps> = ({
     context.fillStyle = COLORS.sky;
     context.fillRect(0, 0, actualWidth, actualHeight);
 
-    // Draw pipes
+    // Draw ground
+    const groundSprite = spriteManager.getSprite('ground');
+    if (groundSprite) {
+      SpriteRenderer.drawSprite(context, groundSprite, {
+        x: 0,
+        y: actualHeight - 100,
+        width: actualWidth,
+        height: 100
+      });
+    }
+
+    // Draw pipes using sprites
     pipes.forEach((pipe) => {
-      context.fillStyle = COLORS.pipe;
+      const topPipeSprite = spriteManager.getSprite('pipe-top');
+      const bottomPipeSprite = spriteManager.getSprite('pipe-bottom');
       
-      // Draw top pipe
-      context.fillRect(
-        pipe.x, 
-        0, 
-        pipe.width, 
-        pipe.gapY
-      );
-      
-      // Draw bottom pipe
-      context.fillRect(
-        pipe.x, 
-        pipe.gapY + pipe.gapHeight, 
-        pipe.width, 
-        actualHeight - (pipe.gapY + pipe.gapHeight)
-      );
+      if (topPipeSprite && bottomPipeSprite) {
+        // Draw top pipe
+        SpriteRenderer.drawSprite(context, topPipeSprite, {
+          x: pipe.x,
+          y: 0,
+          width: pipe.width,
+          height: pipe.gapY,
+          flipY: true // Flip the top pipe
+        });
+        
+        // Draw bottom pipe
+        SpriteRenderer.drawSprite(context, bottomPipeSprite, {
+          x: pipe.x,
+          y: pipe.gapY + pipe.gapHeight,
+          width: pipe.width,
+          height: actualHeight - (pipe.gapY + pipe.gapHeight) - 100 // Account for ground
+        });
+      }
     });
 
-    // Draw bird
-    context.save();
-    context.translate(bird.x + 12, bird.y + 12); // Center rotation
-    context.rotate(bird.rotation);
-    context.fillStyle = COLORS.bird;
-    context.fillRect(-12, -12, 24, 24);
-    context.restore();
+    // Determine bird animation state and draw bird with sprite
+    let birdSpriteId = 'bird-idle';
+    let shouldAnimate = false;
+
+    if (!bird.isAlive) {
+      birdSpriteId = 'bird-dead';
+    } else if (bird.velocity < -2) {
+      birdSpriteId = 'bird-flap';
+      shouldAnimate = true;
+    } else if (bird.velocity > 2) {
+      birdSpriteId = 'bird-fall';
+    }
+
+    // Handle bird animation
+    if (shouldAnimate) {
+      const flapSprite = spriteManager.getAnimatedSprite('bird-flap');
+      if (flapSprite && !flapSprite.playing) {
+        spriteManager.playAnimation('bird-flap');
+      }
+    } else {
+      spriteManager.stopAnimation('bird-flap');
+    }
+
+    // Draw bird with sprite
+    const birdSprite = shouldAnimate 
+      ? spriteManager.getAnimatedSprite('bird-flap') 
+      : spriteManager.getSprite(birdSpriteId);
+    
+    if (birdSprite) {
+      SpriteRenderer.drawSprite(context, birdSprite, {
+        x: bird.x,
+        y: bird.y,
+        width: 24,
+        height: 24,
+        rotation: bird.rotation,
+        alpha: bird.isAlive ? 1 : 0.7
+      });
+    }
 
     // Draw UI
     context.fillStyle = COLORS.text;
     context.font = 'bold 32px Arial';
     context.textAlign = 'center';
+    context.strokeStyle = COLORS.white;
+    context.lineWidth = 3;
+    context.strokeText(score.toString(), actualWidth / 2, 50);
     context.fillText(score.toString(), actualWidth / 2, 50);
 
     // Draw game status
     context.font = '16px Arial';
+    context.fillStyle = COLORS.text;
     if (gameMode === 'gameOver') {
-      context.fillText('Game Over! Press R to restart', actualWidth / 2, actualHeight / 2 + 60);
-      context.fillText(`Final Score: ${score}`, actualWidth / 2, actualHeight / 2 + 90);
+      // Game over background
+      context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      context.fillRect(0, 0, actualWidth, actualHeight);
+      
+      context.fillStyle = COLORS.white;
+      context.font = 'bold 24px Arial';
+      context.strokeStyle = COLORS.text;
+      context.lineWidth = 2;
+      context.strokeText('Game Over!', actualWidth / 2, actualHeight / 2 - 20);
+      context.fillText('Game Over!', actualWidth / 2, actualHeight / 2 - 20);
+      
+      context.font = '16px Arial';
+      context.strokeText('Press R to restart', actualWidth / 2, actualHeight / 2 + 10);
+      context.fillText('Press R to restart', actualWidth / 2, actualHeight / 2 + 10);
+      
+      context.strokeText(`Final Score: ${score}`, actualWidth / 2, actualHeight / 2 + 40);
+      context.fillText(`Final Score: ${score}`, actualWidth / 2, actualHeight / 2 + 40);
+      
       if (score === highScore && score > 0) {
-        context.fillStyle = COLORS.white;
-        context.fillText('NEW HIGH SCORE!', actualWidth / 2, actualHeight / 2 + 120);
+        context.fillStyle = '#FFD700';
+        context.strokeText('NEW HIGH SCORE!', actualWidth / 2, actualHeight / 2 + 70);
+        context.fillText('NEW HIGH SCORE!', actualWidth / 2, actualHeight / 2 + 70);
       }
     } else if (isPaused) {
-      context.fillText('PAUSED - Press Space to resume', actualWidth / 2, actualHeight / 2);
+      context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      context.fillRect(0, 0, actualWidth, actualHeight);
+      
+      context.fillStyle = COLORS.white;
+      context.font = 'bold 20px Arial';
+      context.strokeText('PAUSED', actualWidth / 2, actualHeight / 2);
+      context.fillText('PAUSED', actualWidth / 2, actualHeight / 2);
+      
+      context.font = '14px Arial';
+      context.strokeText('Press Space to resume', actualWidth / 2, actualHeight / 2 + 30);
+      context.fillText('Press Space to resume', actualWidth / 2, actualHeight / 2 + 30);
     }
 
   }, [context, isReady, actualWidth, actualHeight, bird, pipes, score, highScore, gameMode, isPaused, actions]);
@@ -171,14 +257,43 @@ const Game: React.FC<GameProps> = ({
     context.fillStyle = COLORS.sky;
     context.fillRect(0, 0, actualWidth, actualHeight);
 
+    // Draw ground
+    const groundSprite = spriteManager.getSprite('ground');
+    if (groundSprite) {
+      SpriteRenderer.drawSprite(context, groundSprite, {
+        x: 0,
+        y: actualHeight - 100,
+        width: actualWidth,
+        height: 100
+      });
+    }
+
+    // Draw idle bird
+    const birdSprite = spriteManager.getSprite('bird-idle');
+    if (birdSprite) {
+      SpriteRenderer.drawSprite(context, birdSprite, {
+        x: 100,
+        y: actualHeight / 2 - 50,
+        width: 24,
+        height: 24
+      });
+    }
+
     // Add initial text
     context.fillStyle = COLORS.text;
-    context.font = '24px Arial';
+    context.font = 'bold 24px Arial';
     context.textAlign = 'center';
-    context.fillText('Flappy Bird Game', actualWidth / 2, actualHeight / 2 - 40);
+    context.strokeStyle = COLORS.white;
+    context.lineWidth = 3;
+    context.strokeText('Flappy Bird', actualWidth / 2, actualHeight / 2 - 40);
+    context.fillText('Flappy Bird', actualWidth / 2, actualHeight / 2 - 40);
+    
     context.font = '18px Arial';
+    context.strokeText('Press Space to Start Game', actualWidth / 2, actualHeight / 2);
     context.fillText('Press Space to Start Game', actualWidth / 2, actualHeight / 2);
+    
     context.font = '14px Arial';
+    context.strokeText(`High Score: ${highScore}`, actualWidth / 2, actualHeight / 2 + 40);
     context.fillText(`High Score: ${highScore}`, actualWidth / 2, actualHeight / 2 + 40);
 
   }, [context, isReady, actualWidth, actualHeight, isLoopRunning, highScore]);
@@ -231,7 +346,7 @@ const Game: React.FC<GameProps> = ({
     if (!isGameRunning || isPaused) return;
 
     const spawnPipe = () => {
-      const gapY = Math.random() * (actualHeight - 300) + 100; // Random gap position
+      const gapY = Math.random() * (actualHeight - 400) + 150; // Adjusted for ground
       actions.addPipe(actualWidth + 50, gapY);
     };
 
@@ -290,7 +405,7 @@ const Game: React.FC<GameProps> = ({
           • <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to stop
         </p>
         <p className="text-xs text-gray-400 mt-1">
-          Click canvas for touch controls • High score saved automatically
+          ✨ Enhanced with animated sprites! Click canvas for touch controls
         </p>
       </div>
     </div>
