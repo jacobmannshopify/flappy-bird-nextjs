@@ -41,7 +41,7 @@ interface GameState {
     resetBird: () => void;
     
     // Pipe actions
-    addPipe: (x: number, gapY: number) => void;
+    addPipe: (x: number, gapY: number, style?: 'green' | 'blue' | 'red') => void;
     updatePipes: (deltaTime: number) => void;
     removePipe: (id: string) => void;
     clearPipes: () => void;
@@ -227,28 +227,22 @@ export const useGameStore = create<GameState>()(
       },
 
       // Pipe actions
-      addPipe: (x: number, gapY: number) => {
-        set((state) => {
-          const pipeId = `pipe-${state.nextPipeId}`;
-          const gapHeight = DEFAULT_GAME_CONFIG.pipes.gapHeight;
-          const pipeWidth = DEFAULT_GAME_CONFIG.pipes.width;
+      addPipe: (x: number, gapY: number, style?: 'green' | 'blue' | 'red') => {
+        const newPipe: Pipe = {
+          id: `pipe-${Date.now()}-${Math.random()}`,
+          x,
+          y: 0,
+          width: 60,
+          height: DEFAULT_GAME_CONFIG.canvas.height,
+          gapY,
+          gapHeight: 180,
+          passed: false,
+          style: style || (['green', 'blue', 'red'] as const)[Math.floor(Math.random() * 3)] // Random style if not specified
+        };
 
-          const newPipe: Pipe = {
-            id: pipeId,
-            x,
-            y: 0,
-            width: pipeWidth,
-            height: DEFAULT_GAME_CONFIG.canvas.height,
-            passed: false,
-            gapY,
-            gapHeight,
-          };
-
-          return {
-            pipes: [...state.pipes, newPipe],
-            nextPipeId: state.nextPipeId + 1,
-          };
-        });
+        set(state => ({
+          pipes: [...state.pipes, newPipe]
+        }));
       },
 
       updatePipes: (deltaTime: number) => {

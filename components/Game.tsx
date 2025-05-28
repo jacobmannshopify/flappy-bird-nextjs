@@ -5,6 +5,7 @@ import { useCanvas } from '@/hooks/useCanvas';
 import { useGameLoop } from '@/hooks/useGameLoop';
 import { useGameStore, useGameActions, useGameMode, useScore, useHighScore } from '@/lib/gameStore';
 import { spriteManager, SpriteRenderer } from '@/lib/spriteManager';
+import { backgroundManager } from '@/lib/backgroundManager';
 import { COLORS } from '@/constants/game';
 
 // TypeScript interfaces for component props
@@ -66,15 +67,24 @@ const Game: React.FC<GameProps> = ({
     // Update pipes
     actions.updatePipes(deltaTime);
 
+    // Update background parallax
+    backgroundManager.update(deltaTime);
+    
+    // Set background scroll speed based on game state
+    if (isGameRunning && !isPaused) {
+      backgroundManager.setScrollSpeed(1);
+    } else {
+      backgroundManager.setScrollSpeed(0.3); // Slow scroll when paused/menu
+    }
+
     // Update sprite animations
     spriteManager.updateAnimations(totalTime);
 
     // Clear canvas
     context.clearRect(0, 0, actualWidth, actualHeight);
 
-    // Draw background
-    context.fillStyle = COLORS.sky;
-    context.fillRect(0, 0, actualWidth, actualHeight);
+    // Draw beautiful parallax background layers
+    backgroundManager.render(context, actualWidth, actualHeight);
 
     // Draw ground
     const groundSprite = spriteManager.getSprite('ground');
@@ -87,10 +97,9 @@ const Game: React.FC<GameProps> = ({
       });
     }
 
-    // Draw pipes using sprites
+    // Draw pipes using sprites with style variety
     pipes.forEach((pipe) => {
-      const topPipeSprite = spriteManager.getSprite('pipe-top');
-      const bottomPipeSprite = spriteManager.getSprite('pipe-bottom');
+      const { top: topPipeSprite, bottom: bottomPipeSprite } = spriteManager.getPipeSprites(pipe.style);
       
       if (topPipeSprite && bottomPipeSprite) {
         // Draw top pipe
@@ -201,7 +210,7 @@ const Game: React.FC<GameProps> = ({
       context.fillText('Press Space to resume', actualWidth / 2, actualHeight / 2 + 30);
     }
 
-  }, [context, isReady, actualWidth, actualHeight, bird, pipes, score, highScore, gameMode, isPaused, actions]);
+  }, [context, isReady, actualWidth, actualHeight, bird, pipes, score, highScore, gameMode, isPaused, isGameRunning, actions]);
 
   // Use our custom game loop hook
   const {
@@ -253,9 +262,11 @@ const Game: React.FC<GameProps> = ({
   useEffect(() => {
     if (!context || !isReady || isLoopRunning) return;
 
-    // Clear canvas with sky blue background
-    context.fillStyle = COLORS.sky;
-    context.fillRect(0, 0, actualWidth, actualHeight);
+    // Clear canvas and render static background
+    context.clearRect(0, 0, actualWidth, actualHeight);
+    
+    // Draw static background
+    backgroundManager.render(context, actualWidth, actualHeight);
 
     // Draw ground
     const groundSprite = spriteManager.getSprite('ground');

@@ -78,7 +78,12 @@ export const RENDERING = {
     return typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   },
   SMOOTH_SCALING: false,
-  BACKGROUND_PARALLAX_SPEED: 0.5,
+  FPS: 60,
+  DEBUG_MODE: false,
+  CANVAS_SCALE: 1,
+  BIRD_GLOW_RADIUS: 15,
+  PIPE_GLOW_RADIUS: 20,
+  BACKGROUND_PARALLAX_SPEED: 1.5, // Base speed for parallax layers
 } as const;
 
 // Animation constants

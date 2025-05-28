@@ -37,6 +37,7 @@ export interface Pipe extends Position, Dimensions {
   passed: boolean;
   gapY: number;
   gapHeight: number;
+  style: 'green' | 'blue' | 'red';
 }
 
 // Physics types
