@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useCanvas } from '@/hooks/useCanvas';
+import { COLORS } from '@/constants/game';
 
 // TypeScript interfaces for component props and state
 interface GameProps {
@@ -20,57 +22,44 @@ const Game: React.FC<GameProps> = ({
   height = 600, 
   className = '' 
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState>({
     isGameRunning: false,
     isGameOver: false,
     score: 0
   });
 
-  // Initialize canvas and rendering context
+  // Use our custom canvas hook
+  const {
+    canvasRef,
+    context,
+    actualWidth,
+    actualHeight,
+    isReady,
+    clearCanvas
+  } = useCanvas({
+    width,
+    height,
+    maintainAspectRatio: true,
+    pixelPerfect: true,
+    enableHighDPI: true
+  });
+
+  // Initialize canvas content when ready
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.error('Failed to get 2D rendering context');
-      return;
-    }
-
-    // Configure canvas for pixel-perfect rendering
-    ctx.imageSmoothingEnabled = false;
-    
-    // Set canvas dimensions
-    canvas.width = width;
-    canvas.height = height;
+    if (!context || !isReady) return;
 
     // Clear canvas with sky blue background
-    ctx.fillStyle = '#87CEEB';
-    ctx.fillRect(0, 0, width, height);
+    context.fillStyle = COLORS.sky;
+    context.fillRect(0, 0, actualWidth, actualHeight);
 
     // Add some initial text
-    ctx.fillStyle = '#333';
-    ctx.font = '24px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Flappy Bird Game Canvas', width / 2, height / 2);
-    ctx.fillText('Press Space to Start', width / 2, height / 2 + 40);
+    context.fillStyle = COLORS.text;
+    context.font = '24px Arial';
+    context.textAlign = 'center';
+    context.fillText('Flappy Bird Game Canvas', actualWidth / 2, actualHeight / 2);
+    context.fillText('Press Space to Start', actualWidth / 2, actualHeight / 2 + 40);
 
-  }, [width, height]);
-
-  // Handle canvas cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Cleanup function for when component unmounts
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-      }
-    };
-  }, []);
+  }, [context, isReady, actualWidth, actualHeight]);
 
   // Handle keyboard input
   useEffect(() => {
@@ -103,17 +92,16 @@ const Game: React.FC<GameProps> = ({
         <p className="text-sm text-gray-600">
           Status: {gameState.isGameRunning ? 'Playing' : gameState.isGameOver ? 'Game Over' : 'Ready'}
         </p>
+        <p className="text-xs text-gray-400">
+          Canvas: {actualWidth}x{actualHeight} | Ready: {isReady ? 'Yes' : 'No'}
+        </p>
       </div>
       
       <canvas
         ref={canvasRef}
-        width={width}
-        height={height}
         onClick={handleCanvasClick}
         className="border-2 border-gray-300 cursor-pointer bg-sky-200 rounded-lg shadow-lg"
         style={{ 
-          maxWidth: '100%', 
-          height: 'auto',
           imageRendering: 'pixelated' // For crisp pixel art
         }}
       />
