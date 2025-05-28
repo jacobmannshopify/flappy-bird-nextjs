@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { soundManager } from '@/lib/soundManager';
 
 interface GameOverScreenProps {
   score: number;
@@ -38,7 +39,7 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
     // Entrance animation
     const timer = setTimeout(() => setIsVisible(true), 100);
     
-    // Score counting animation
+    // Score counting animation with sound effects
     const scoreTimer = setTimeout(() => {
       const duration = 1500;
       const steps = 60;
@@ -51,11 +52,18 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
           setAnimatedScore(score);
           clearInterval(counter);
           
-          // Show fireworks for high scores
-          if (isNewHighScore && score > 10) {
-            setShowFireworks(true);
-            setTimeout(() => setShowFireworks(false), 3000);
-          }
+          // Play celebration sounds based on achievements
+          setTimeout(async () => {
+            if (isNewHighScore && score > 10) {
+              await soundManager.playSound('highScore');
+              setShowFireworks(true);
+              setTimeout(() => setShowFireworks(false), 3000);
+            } else if (medal) {
+              await soundManager.playSound('medal');
+            } else if (score > 0) {
+              await soundManager.playSound('achievement');
+            }
+          }, 200);
         } else {
           setAnimatedScore(Math.floor(current));
         }
@@ -66,25 +74,27 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
       clearTimeout(timer);
       clearTimeout(scoreTimer);
     };
-  }, [score, isNewHighScore]);
+  }, [score, isNewHighScore, medal]);
 
-  const handleRestart = () => {
+  const handleRestart = async () => {
+    await soundManager.playSound('button');
     setIsVisible(false);
     setTimeout(onRestart, 300);
   };
 
-  const handleMainMenu = () => {
+  const handleMainMenu = async () => {
+    await soundManager.playSound('button');
     setIsVisible(false);
     setTimeout(onMainMenu, 300);
   };
 
-  const handleKeyPress = (event: React.KeyboardEvent) => {
+  const handleKeyPress = async (event: React.KeyboardEvent) => {
     if (event.code === 'KeyR' || event.code === 'Space') {
       event.preventDefault();
-      handleRestart();
+      await handleRestart();
     } else if (event.code === 'Escape') {
       event.preventDefault();
-      handleMainMenu();
+      await handleMainMenu();
     }
   };
 

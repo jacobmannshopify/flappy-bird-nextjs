@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { soundManager } from '@/lib/soundManager';
 
 interface PauseMenuProps {
   onResume: () => void;
@@ -24,23 +25,25 @@ const PauseMenu: React.FC<PauseMenuProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  const handleResume = () => {
+  const handleResume = async () => {
+    await soundManager.playSound('button');
     setIsVisible(false);
     setTimeout(onResume, 200);
   };
 
-  const handleMainMenu = () => {
+  const handleMainMenu = async () => {
+    await soundManager.playSound('button');
     setIsVisible(false);
     setTimeout(onMainMenu, 200);
   };
 
-  const handleKeyPress = (event: React.KeyboardEvent) => {
+  const handleKeyPress = async (event: React.KeyboardEvent) => {
     if (event.code === 'Space' || event.code === 'KeyP') {
       event.preventDefault();
-      handleResume();
+      await handleResume();
     } else if (event.code === 'Escape') {
       event.preventDefault();
-      handleMainMenu();
+      await handleMainMenu();
     }
   };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { soundManager } from '@/lib/soundManager';
 
 interface StartScreenProps {
   onStartGame: () => void;
@@ -31,15 +32,16 @@ const StartScreen: React.FC<StartScreenProps> = ({
     };
   }, []);
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    await soundManager.playSound('button');
     setIsVisible(false);
     setTimeout(onStartGame, 300); // Smooth transition out
   };
 
-  const handleKeyPress = (event: React.KeyboardEvent) => {
+  const handleKeyPress = async (event: React.KeyboardEvent) => {
     if (event.code === 'Space' || event.code === 'Enter') {
       event.preventDefault();
-      handleStart();
+      await handleStart();
     }
   };
 

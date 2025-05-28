@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useCanvas } from '@/hooks/useCanvas';
 import { useGameLoop } from '@/hooks/useGameLoop';
 import { useGameStore, useGameActions, useGameMode, useScore, useHighScore } from '@/lib/gameStore';
 import { spriteManager, SpriteRenderer } from '@/lib/spriteManager';
 import { backgroundManager } from '@/lib/backgroundManager';
+import { soundManager } from '@/lib/soundManager';
 import { COLORS } from '@/constants/game';
 
 // Import UI Components
@@ -13,6 +14,7 @@ import StartScreen from '@/components/UI/StartScreen';
 import GameOverScreen from '@/components/UI/GameOverScreen';
 import PauseMenu from '@/components/UI/PauseMenu';
 import GameHUD from '@/components/UI/GameHUD';
+import VolumeControl from '@/components/UI/VolumeControl';
 
 // TypeScript interfaces for component props
 interface GameProps {
@@ -32,13 +34,18 @@ const Game: React.FC<GameProps> = ({
   const highScore = useHighScore();
   const actions = useGameActions();
   
+  // Add ref to track previous score for scoring sound
+  const previousScoreRef = useRef(score);
+  // Add ref to track previous bird alive state for collision sound
+  const prevBirdAliveRef = useRef(true);
+  
   // Get the full game state for rendering
-  const bird = useGameStore((state) => state.bird);
-  const pipes = useGameStore((state) => state.pipes);
-  const isGameRunning = useGameStore((state) => state.isGameRunning);
-  const isPaused = useGameStore((state) => state.isPaused);
-  const gameTime = useGameStore((state) => state.gameTime);
-  const stats = useGameStore((state) => state.stats);
+  const bird = useGameStore((state: any) => state.bird);
+  const pipes = useGameStore((state: any) => state.pipes);
+  const isGameRunning = useGameStore((state: any) => state.isGameRunning);
+  const isPaused = useGameStore((state: any) => state.isPaused);
+  const gameTime = useGameStore((state: any) => state.gameTime);
+  const stats = useGameStore((state: any) => state.stats);
 
   // Use our custom canvas hook
   const {
@@ -60,6 +67,50 @@ const Game: React.FC<GameProps> = ({
   useEffect(() => {
     spriteManager.initializeGameSprites();
   }, []);
+
+  // Initialize sound manager on first user interaction
+  useEffect(() => {
+    const initializeSounds = async () => {
+      await soundManager.initialize();
+    };
+    
+    // Initialize on any user interaction
+    const handleFirstInteraction = () => {
+      initializeSounds();
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('keydown', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('keydown', handleFirstInteraction);
+    document.addEventListener('touchstart', handleFirstInteraction);
+
+    return () => {
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('keydown', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, []);
+
+  // Add sound effect when score changes (bird passes pipes)
+  useEffect(() => {
+    if (score > previousScoreRef.current && isGameRunning) {
+      soundManager.playSound('score');
+      previousScoreRef.current = score;
+    } else {
+      previousScoreRef.current = score;
+    }
+  }, [score, isGameRunning]);
+
+  // Add sound effect when bird dies (collision)
+  useEffect(() => {
+    if (prevBirdAliveRef.current && !bird.isAlive) {
+      soundManager.playSound('collision');
+    }
+    
+    prevBirdAliveRef.current = bird.isAlive;
+  }, [bird.isAlive]);
 
   // Game update callback for the game loop
   const gameUpdate = useCallback((deltaTime: number, totalTime: number) => {
@@ -105,7 +156,7 @@ const Game: React.FC<GameProps> = ({
     }
 
     // Draw pipes using sprites with style variety
-    pipes.forEach((pipe) => {
+    pipes.forEach((pipe: any) => {
       const { top: topPipeSprite, bottom: bottomPipeSprite } = spriteManager.getPipeSprites(pipe.style);
       
       if (topPipeSprite && bottomPipeSprite) {
@@ -251,27 +302,34 @@ const Game: React.FC<GameProps> = ({
 
   }, [context, isReady, actualWidth, actualHeight, isLoopRunning, highScore]);
 
-  // Handle keyboard input
+  // Enhanced keyboard input with sound effects
   useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
+    const handleKeyPress = async (event: KeyboardEvent) => {
       if (event.code === 'Space') {
         event.preventDefault();
         
         if (gameMode === 'menu') {
+          await soundManager.playSound('button');
           actions.startGame();
         } else if (gameMode === 'playing') {
+          await soundManager.playSound('flap');
           actions.flapBird();
         } else if (gameMode === 'paused') {
+          await soundManager.playSound('button');
           actions.resumeGame();
         } else if (gameMode === 'gameOver') {
+          await soundManager.playSound('button');
           actions.restartGame();
         }
       } else if (event.code === 'KeyP' && gameMode === 'playing') {
+        await soundManager.playSound('button');
         actions.pauseGame();
       } else if (event.code === 'KeyR' && gameMode === 'gameOver') {
+        await soundManager.playSound('button');
         actions.restartGame();
       } else if (event.code === 'Escape') {
         if (gameMode === 'playing' || gameMode === 'paused') {
+          await soundManager.playSound('button');
           actions.stopGame();
         }
       }
@@ -281,15 +339,19 @@ const Game: React.FC<GameProps> = ({
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [gameMode, actions]);
 
-  // Handle mouse/touch input
-  const handleCanvasClick = () => {
+  // Enhanced mouse/touch input with sound effects
+  const handleCanvasClick = async () => {
     if (gameMode === 'menu') {
+      await soundManager.playSound('button');
       actions.startGame();
     } else if (gameMode === 'playing') {
+      await soundManager.playSound('flap');
       actions.flapBird();
     } else if (gameMode === 'paused') {
+      await soundManager.playSound('button');
       actions.resumeGame();
     } else if (gameMode === 'gameOver') {
+      await soundManager.playSound('button');
       actions.restartGame();
     }
   };
@@ -317,6 +379,9 @@ const Game: React.FC<GameProps> = ({
 
   return (
     <div className={`game-container relative ${className}`}>
+      {/* Volume Control */}
+      <VolumeControl position="top-right" />
+      
       {/* Main Game Canvas */}
       <canvas
         ref={canvasRef}

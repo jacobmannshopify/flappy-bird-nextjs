@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { soundManager } from '@/lib/soundManager';
 
 interface GameHUDProps {
   score: number;
@@ -22,6 +23,7 @@ const GameHUD: React.FC<GameHUDProps> = ({
   const [previousScore, setPreviousScore] = useState(score);
   const [scoreAnimation, setScoreAnimation] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [lastMilestoneScore, setLastMilestoneScore] = useState(0);
 
   useEffect(() => {
     // Entrance animation
@@ -30,14 +32,28 @@ const GameHUD: React.FC<GameHUDProps> = ({
   }, []);
 
   useEffect(() => {
-    // Score increase animation
+    // Score increase animation and milestone sounds
     if (score > previousScore) {
       setScoreAnimation(true);
+      
+      // Play milestone achievement sounds
+      if (score > 0 && score % 10 === 0 && score > lastMilestoneScore) {
+        soundManager.playSound('achievement');
+        setLastMilestoneScore(score);
+      }
+      
       const timer = setTimeout(() => setScoreAnimation(false), 300);
       setPreviousScore(score);
       return () => clearTimeout(timer);
     }
-  }, [score, previousScore]);
+  }, [score, previousScore, lastMilestoneScore]);
+
+  // Play high score celebration sound
+  useEffect(() => {
+    if (score > highScore && score > 0 && score > previousScore) {
+      soundManager.playSound('highScore');
+    }
+  }, [score, highScore, previousScore]);
 
   const formatTime = (milliseconds: number): string => {
     const seconds = Math.floor(milliseconds / 1000);
