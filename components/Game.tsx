@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useCanvas } from '@/hooks/useCanvas';
 import { useGameLoop } from '@/hooks/useGameLoop';
-import { useGameStore, useGameActions, useGameMode, useScore, useHighScore } from '@/lib/gameStore';
+import { useGameStore, useGameActions, useGameMode, useScore, useHighScore } from '../lib/gameStore';
 import { spriteManager, SpriteRenderer } from '@/lib/spriteManager';
 import { backgroundManager } from '@/lib/backgroundManager';
 import { soundManager } from '@/lib/soundManager';
@@ -112,7 +112,7 @@ const Game: React.FC<GameProps> = ({
     } else {
       previousScoreRef.current = score;
     }
-  }, [score, isGameRunning, bird.x, bird.y]);
+  }, [score, isGameRunning]);
 
   // Add sound effect and death animation when bird dies
   useEffect(() => {
@@ -133,7 +133,7 @@ const Game: React.FC<GameProps> = ({
     }
     
     prevBirdAliveRef.current = bird.isAlive;
-  }, [bird.isAlive, bird.x, bird.y, bird.rotation]);
+  }, [bird.isAlive]);
 
   // Reset death animation trigger when game restarts
   useEffect(() => {
@@ -268,7 +268,7 @@ const Game: React.FC<GameProps> = ({
     // Render all animations (particles, score popups, screen flash)
     animationManager.render(context, actualWidth, actualHeight);
 
-  }, [context, isReady, actualWidth, actualHeight, bird, pipes, score, highScore, gameMode, isPaused, isGameRunning, actions]);
+  }, [context, isReady, actualWidth, actualHeight, isGameRunning, isPaused]);
 
   // Use our custom game loop hook
   const {
@@ -288,7 +288,7 @@ const Game: React.FC<GameProps> = ({
   // Load high score on component mount
   useEffect(() => {
     actions.loadHighScore();
-  }, [actions]);
+  }, []);
 
   // Sync game loop with game state
   useEffect(() => {
@@ -297,7 +297,7 @@ const Game: React.FC<GameProps> = ({
     } else if (!isGameRunning && isLoopRunning) {
       stopGameLoop();
     }
-  }, [isGameRunning, isLoopRunning, startGameLoop, stopGameLoop]);
+  }, [isGameRunning, isLoopRunning]);
 
   // Sync pause state
   useEffect(() => {
@@ -306,7 +306,7 @@ const Game: React.FC<GameProps> = ({
     } else if (!isPaused && isLoopRunning && isLoopPaused) {
       resumeGameLoop();
     }
-  }, [isPaused, isLoopRunning, isLoopPaused, pauseGameLoop, resumeGameLoop]);
+  }, [isPaused, isLoopRunning, isLoopPaused]);
 
   // Handle game over state
   useEffect(() => {
@@ -314,7 +314,7 @@ const Game: React.FC<GameProps> = ({
       actions.updateHighScore();
       actions.saveHighScore();
     }
-  }, [gameMode, actions]);
+  }, [gameMode]);
 
   // Initialize canvas content when ready (but not running game loop)
   useEffect(() => {
@@ -348,7 +348,7 @@ const Game: React.FC<GameProps> = ({
       });
     }
 
-  }, [context, isReady, actualWidth, actualHeight, isLoopRunning, highScore]);
+  }, [context, isReady, actualWidth, actualHeight, isLoopRunning]);
 
   // Enhanced keyboard input with sound effects
   useEffect(() => {
@@ -385,10 +385,10 @@ const Game: React.FC<GameProps> = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [gameMode, actions]);
+  }, [gameMode]);
 
   // Enhanced mouse/touch input with sound effects
-  const handleCanvasClick = async () => {
+  const handleCanvasClick = useCallback(async () => {
     if (gameMode === 'menu') {
       await soundManager.playSound('button');
       actions.startGame();
@@ -402,7 +402,7 @@ const Game: React.FC<GameProps> = ({
       await soundManager.playSound('button');
       actions.restartGame();
     }
-  };
+  }, [gameMode, actions]);
 
   // Add pipe spawning logic
   useEffect(() => {
@@ -423,7 +423,7 @@ const Game: React.FC<GameProps> = ({
       clearTimeout(initialPipeTimer);
       clearInterval(pipeSpawnInterval);
     };
-  }, [isGameRunning, isPaused, actualWidth, actions]);
+  }, [isGameRunning, isPaused, actualWidth]);
 
   return (
     <div className={`game-container relative ${className}`}>
