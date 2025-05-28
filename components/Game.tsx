@@ -8,6 +8,12 @@ import { spriteManager, SpriteRenderer } from '@/lib/spriteManager';
 import { backgroundManager } from '@/lib/backgroundManager';
 import { COLORS } from '@/constants/game';
 
+// Import UI Components
+import StartScreen from '@/components/UI/StartScreen';
+import GameOverScreen from '@/components/UI/GameOverScreen';
+import PauseMenu from '@/components/UI/PauseMenu';
+import GameHUD from '@/components/UI/GameHUD';
+
 // TypeScript interfaces for component props
 interface GameProps {
   width?: number;
@@ -32,6 +38,7 @@ const Game: React.FC<GameProps> = ({
   const isGameRunning = useGameStore((state) => state.isGameRunning);
   const isPaused = useGameStore((state) => state.isPaused);
   const gameTime = useGameStore((state) => state.gameTime);
+  const stats = useGameStore((state) => state.stats);
 
   // Use our custom canvas hook
   const {
@@ -160,55 +167,7 @@ const Game: React.FC<GameProps> = ({
       });
     }
 
-    // Draw UI
-    context.fillStyle = COLORS.text;
-    context.font = 'bold 32px Arial';
-    context.textAlign = 'center';
-    context.strokeStyle = COLORS.white;
-    context.lineWidth = 3;
-    context.strokeText(score.toString(), actualWidth / 2, 50);
-    context.fillText(score.toString(), actualWidth / 2, 50);
-
-    // Draw game status
-    context.font = '16px Arial';
-    context.fillStyle = COLORS.text;
-    if (gameMode === 'gameOver') {
-      // Game over background
-      context.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      context.fillRect(0, 0, actualWidth, actualHeight);
-      
-      context.fillStyle = COLORS.white;
-      context.font = 'bold 24px Arial';
-      context.strokeStyle = COLORS.text;
-      context.lineWidth = 2;
-      context.strokeText('Game Over!', actualWidth / 2, actualHeight / 2 - 20);
-      context.fillText('Game Over!', actualWidth / 2, actualHeight / 2 - 20);
-      
-      context.font = '16px Arial';
-      context.strokeText('Press R to restart', actualWidth / 2, actualHeight / 2 + 10);
-      context.fillText('Press R to restart', actualWidth / 2, actualHeight / 2 + 10);
-      
-      context.strokeText(`Final Score: ${score}`, actualWidth / 2, actualHeight / 2 + 40);
-      context.fillText(`Final Score: ${score}`, actualWidth / 2, actualHeight / 2 + 40);
-      
-      if (score === highScore && score > 0) {
-        context.fillStyle = '#FFD700';
-        context.strokeText('NEW HIGH SCORE!', actualWidth / 2, actualHeight / 2 + 70);
-        context.fillText('NEW HIGH SCORE!', actualWidth / 2, actualHeight / 2 + 70);
-      }
-    } else if (isPaused) {
-      context.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      context.fillRect(0, 0, actualWidth, actualHeight);
-      
-      context.fillStyle = COLORS.white;
-      context.font = 'bold 20px Arial';
-      context.strokeText('PAUSED', actualWidth / 2, actualHeight / 2);
-      context.fillText('PAUSED', actualWidth / 2, actualHeight / 2);
-      
-      context.font = '14px Arial';
-      context.strokeText('Press Space to resume', actualWidth / 2, actualHeight / 2 + 30);
-      context.fillText('Press Space to resume', actualWidth / 2, actualHeight / 2 + 30);
-    }
+    // Note: UI rendering is now handled by React components, not canvas
 
   }, [context, isReady, actualWidth, actualHeight, bird, pipes, score, highScore, gameMode, isPaused, isGameRunning, actions]);
 
@@ -218,7 +177,7 @@ const Game: React.FC<GameProps> = ({
     stop: stopGameLoop,
     pause: pauseGameLoop,
     resume: resumeGameLoop,
-    stats,
+    stats: loopStats,
     isRunning: isLoopRunning,
     isPaused: isLoopPaused
   } = useGameLoop(gameUpdate, {
@@ -290,23 +249,6 @@ const Game: React.FC<GameProps> = ({
       });
     }
 
-    // Add initial text
-    context.fillStyle = COLORS.text;
-    context.font = 'bold 24px Arial';
-    context.textAlign = 'center';
-    context.strokeStyle = COLORS.white;
-    context.lineWidth = 3;
-    context.strokeText('Flappy Bird', actualWidth / 2, actualHeight / 2 - 40);
-    context.fillText('Flappy Bird', actualWidth / 2, actualHeight / 2 - 40);
-    
-    context.font = '18px Arial';
-    context.strokeText('Press Space to Start Game', actualWidth / 2, actualHeight / 2);
-    context.fillText('Press Space to Start Game', actualWidth / 2, actualHeight / 2);
-    
-    context.font = '14px Arial';
-    context.strokeText(`High Score: ${highScore}`, actualWidth / 2, actualHeight / 2 + 40);
-    context.fillText(`High Score: ${highScore}`, actualWidth / 2, actualHeight / 2 + 40);
-
   }, [context, isReady, actualWidth, actualHeight, isLoopRunning, highScore]);
 
   // Handle keyboard input
@@ -374,31 +316,8 @@ const Game: React.FC<GameProps> = ({
   }, [isGameRunning, isPaused, actualWidth, actions]);
 
   return (
-    <div className={`game-container ${className}`}>
-      <div className="game-info mb-4 grid grid-cols-3 gap-4">
-        <div>
-          <p className="text-lg font-semibold">Score: {score}</p>
-          <p className="text-sm text-gray-600">High Score: {highScore}</p>
-          <p className="text-xs text-gray-400">
-            Mode: {gameMode}
-          </p>
-        </div>
-        
-        <div className="text-center">
-          <p className="text-sm font-semibold text-blue-600">Game State</p>
-          <p className="text-xs text-gray-600">Running: {isGameRunning ? 'Yes' : 'No'}</p>
-          <p className="text-xs text-gray-600">Bird Alive: {bird.isAlive ? 'Yes' : 'No'}</p>
-          <p className="text-xs text-gray-600">Pipes: {pipes.length}</p>
-        </div>
-        
-        <div className="text-right">
-          <p className="text-sm font-semibold text-green-600">Performance</p>
-          <p className="text-xs text-gray-600">FPS: {stats.fps}</p>
-          <p className="text-xs text-gray-600">Frame Time: {stats.frameTime.toFixed(1)}ms</p>
-          <p className="text-xs text-gray-600">Time: {(gameTime / 1000).toFixed(1)}s</p>
-        </div>
-      </div>
-      
+    <div className={`game-container relative ${className}`}>
+      {/* Main Game Canvas */}
       <canvas
         ref={canvasRef}
         onClick={handleCanvasClick}
@@ -408,17 +327,63 @@ const Game: React.FC<GameProps> = ({
         }}
       />
       
-      <div className="game-controls mt-4 text-center">
-        <p className="text-sm text-gray-500">
-          <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Space</kbd> to flap/start
-          • <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">P</kbd> to pause
-          • <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">R</kbd> to restart
-          • <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> to stop
-        </p>
-        <p className="text-xs text-gray-400 mt-1">
-          ✨ Enhanced with animated sprites! Click canvas for touch controls
-        </p>
-      </div>
+      {/* UI Overlays */}
+      {gameMode === 'menu' && (
+        <StartScreen
+          onStartGame={actions.startGame}
+          highScore={highScore}
+        />
+      )}
+
+      {gameMode === 'playing' && (
+        <GameHUD
+          score={score}
+          highScore={highScore}
+          gameTime={gameTime}
+          fps={loopStats.fps}
+          pipesCleared={stats.totalPipesCleared}
+        />
+      )}
+
+      {gameMode === 'paused' && (
+        <PauseMenu
+          onResume={actions.resumeGame}
+          onMainMenu={actions.stopGame}
+          currentScore={score}
+          gameTime={gameTime}
+        />
+      )}
+
+      {gameMode === 'gameOver' && (
+        <GameOverScreen
+          score={score}
+          highScore={highScore}
+          isNewHighScore={score === highScore && score > 0}
+          onRestart={actions.restartGame}
+          onMainMenu={actions.stopGame}
+        />
+      )}
+
+      {/* Development Info Panel (hidden in production) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg text-sm">
+          <h3 className="font-semibold text-gray-800 mb-2">Development Info</h3>
+          <div className="grid grid-cols-2 gap-4 text-gray-600">
+            <div>
+              <p>Mode: {gameMode}</p>
+              <p>Running: {isGameRunning ? 'Yes' : 'No'}</p>
+              <p>Bird Alive: {bird.isAlive ? 'Yes' : 'No'}</p>
+              <p>Pipes: {pipes.length}</p>
+            </div>
+            <div>
+              <p>FPS: {loopStats.fps}</p>
+              <p>Frame Time: {loopStats.frameTime.toFixed(1)}ms</p>
+              <p>Time: {(gameTime / 1000).toFixed(1)}s</p>
+              <p>Score: {score} / {highScore}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
