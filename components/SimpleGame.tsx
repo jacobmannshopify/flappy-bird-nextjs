@@ -48,6 +48,8 @@ const SimpleGame = () => {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [touchFeedback, setTouchFeedback] = useState<{x: number, y: number, opacity: number} | null>(null);
   const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(true);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [musicVolume, setMusicVolume] = useState(0.7);
   
   // Performance and quality settings
   const [qualitySettings, setQualitySettings] = useState({
@@ -68,6 +70,9 @@ const SimpleGame = () => {
   const groundOffsetRef = useRef<number>(0);
   const cloudOffsetRef = useRef<number>(0);
   const dayNightCycleRef = useRef<DayNightCycle>(new DayNightCycle());
+  const proceduralMusicRef = useRef<any>(null);
+  const lastTimeOfDayRef = useRef<string>('dawn');
+  const musicInitializedRef = useRef<boolean>(false);
   
   // Pre-calculate grass positions to avoid expensive random generation every frame
   const grassPositions = useRef<{x: number, heights: number[]}[]>([]);
@@ -151,7 +156,7 @@ const SimpleGame = () => {
     oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.1);
     
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
     
     oscillator.start(audioContext.currentTime);
@@ -173,8 +178,8 @@ const SimpleGame = () => {
     oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
     oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
     
-    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime + 0.1);
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime + 0.1);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
     
     oscillator.start(audioContext.currentTime);
@@ -208,7 +213,7 @@ const SimpleGame = () => {
     filter.type = 'lowpass';
     filter.frequency.value = 300;
     
-    gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
     
     source.start(audioContext.currentTime);
@@ -886,6 +891,9 @@ const SimpleGame = () => {
         } else {
           flapBird();
         }
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        toggleMusic();
       }
     };
 
@@ -908,6 +916,113 @@ const SimpleGame = () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
   }, [gameOver, flapBird, resetGame]);
+
+  // Initialize procedural music only on client side with proper error handling
+  const initializeMusic = useCallback(async () => {
+    if (typeof window === 'undefined' || musicInitializedRef.current) return;
+    
+    try {
+      const { ProceduralMusic } = await import('../lib/proceduralMusic');
+      proceduralMusicRef.current = new ProceduralMusic();
+      musicInitializedRef.current = true;
+    } catch (error) {
+      console.warn('Failed to initialize music system:', error);
+    }
+  }, []);
+
+  // Get music instance safely
+  const getMusic = useCallback(() => {
+    return proceduralMusicRef.current;
+  }, []);
+
+  // Music management functions with safe fallbacks
+  const startMusic = useCallback(async () => {
+    if (!musicEnabled) return;
+    
+    if (!musicInitializedRef.current) {
+      await initializeMusic();
+    }
+    
+    const music = getMusic();
+    if (music && !music.isActive()) {
+      music.start();
+      music.fadeIn(1);
+    }
+  }, [musicEnabled, initializeMusic, getMusic]);
+
+  const stopMusic = useCallback(() => {
+    const music = getMusic();
+    if (music && music.isActive()) {
+      music.fadeOut(1);
+    }
+  }, [getMusic]);
+
+  const updateMusicVolume = useCallback(async (volume: number) => {
+    if (!musicInitializedRef.current) {
+      await initializeMusic();
+    }
+    
+    const music = getMusic();
+    if (music) {
+      music.setVolume(volume);
+    }
+    setMusicVolume(volume);
+  }, [initializeMusic, getMusic]);
+
+  const toggleMusic = useCallback(() => {
+    const newMusicEnabled = !musicEnabled;
+    setMusicEnabled(newMusicEnabled);
+    
+    if (newMusicEnabled && gameStarted && !gameOver) {
+      startMusic();
+    } else {
+      stopMusic();
+    }
+  }, [musicEnabled, gameStarted, gameOver, startMusic, stopMusic]);
+
+  // Update music based on day/night cycle
+  useEffect(() => {
+    if (gameStarted && typeof window !== 'undefined') {
+      const timeInfo = dayNightCycleRef.current.getCurrentTimeInfo(score);
+      const currentTimeOfDay = timeInfo.name.toLowerCase();
+      
+      if (currentTimeOfDay !== lastTimeOfDayRef.current) {
+        const music = getMusic();
+        if (music) {
+          music.setTimeOfDay(currentTimeOfDay);
+        }
+        lastTimeOfDayRef.current = currentTimeOfDay;
+      }
+    }
+  }, [score, gameStarted, getMusic]);
+
+  // Music state management
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (gameStarted && !gameOver && musicEnabled) {
+        startMusic();
+      } else {
+        stopMusic();
+      }
+    }
+  }, [gameStarted, gameOver, musicEnabled, startMusic, stopMusic]);
+
+  // Update music volume
+  useEffect(() => {
+    if (typeof window !== 'undefined' && musicEnabled) {
+      updateMusicVolume(musicVolume);
+    }
+  }, [musicVolume, musicEnabled, updateMusicVolume]);
+
+  // Cleanup music on unmount
+  useEffect(() => {
+    return () => {
+      const music = proceduralMusicRef.current;
+      if (music) {
+        music.stop();
+      }
+    };
+  }, []);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -958,13 +1073,55 @@ const SimpleGame = () => {
         />
         <div className="mt-4 text-gray-600">
           <p>Click canvas or press SPACE to flap</p>
+          <p>Press M to toggle music</p>
           <p>Score: {score}</p>
-          <button
-            onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
-            className="mt-2 px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors"
-          >
-            {showPerformanceMonitor ? 'Hide' : 'Show'} Performance
-          </button>
+          
+          <div className="flex flex-wrap gap-2 mt-3 justify-center">
+            <button
+              onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
+              className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors"
+            >
+              {showPerformanceMonitor ? 'Hide' : 'Show'} Performance
+            </button>
+            
+            <button
+              onClick={toggleMusic}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                musicEnabled 
+                  ? 'bg-green-200 hover:bg-green-300 text-green-800' 
+                  : 'bg-red-200 hover:bg-red-300 text-red-800'
+              }`}
+            >
+              🎵 Music {musicEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          
+          {/* Music Volume Control */}
+          {musicEnabled && (
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <span className="text-xs text-gray-500">🔊 Volume:</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={musicVolume}
+                onChange={(e) => updateMusicVolume(parseFloat(e.target.value))}
+                className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-gray-500 w-8">{Math.round(musicVolume * 100)}%</span>
+            </div>
+          )}
+          
+          {/* Music Status Indicator */}
+          {musicEnabled && gameStarted && (
+            <div className="mt-2 text-xs text-gray-500 text-center">
+              🎼 Playing: {musicInitializedRef.current 
+                ? `${lastTimeOfDayRef.current.charAt(0).toUpperCase() + lastTimeOfDayRef.current.slice(1)} Theme`
+                : 'Loading...'
+              }
+            </div>
+          )}
         </div>
       </div>
       
