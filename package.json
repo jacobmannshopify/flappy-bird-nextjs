@@ -10,14 +10,16 @@
     "build:analyze": "ANALYZE=true next build",
     "build:production": "NODE_ENV=production next build",
     "build:export": "EXPORT=true next build",
+    "build:static": "EXPORT=true next build",
     "performance:test": "npm run build && npm run start",
     "optimize": "npm run build:analyze && npm run performance:test",
     "production:prepare": "npm run lint && npm run build:production && npm run performance:test",
     "bundle:size": "npm run build:analyze && echo 'Bundle analysis saved to ./bundle-analyzer-report.html'",
     "deploy:check": "npm run lint && npm run build:production && echo 'Production build ready for deployment'",
     "deploy:vercel": "vercel --prod",
-    "deploy:static": "npm run build:export && echo 'Static files ready in ./dist directory'",
-    "deploy:preview": "npm run build:export && npx serve dist"
+    "deploy:static": "npm run build:static && echo 'Static files ready in ./out directory'",
+    "deploy:preview": "npm run build:static && npx serve out",
+    "pages:deploy": "npm run build:static && echo 'GitHub Pages files ready in ./out directory'"
   },
   "dependencies": {
     "next": "15.3.2",
