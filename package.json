@@ -7,9 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "analyze": "ANALYZE=true npm run build",
+    "build:analyze": "ANALYZE=true next build",
     "build:production": "NODE_ENV=production next build",
-    "preview": "npm run build && npm run start"
+    "build:export": "EXPORT=true next build",
+    "performance:test": "npm run build && npm run start",
+    "optimize": "npm run build:analyze && npm run performance:test",
+    "production:prepare": "npm run lint && npm run build:production && npm run performance:test",
+    "bundle:size": "npm run build:analyze && echo 'Bundle analysis saved to ./bundle-analyzer-report.html'",
+    "deploy:check": "npm run lint && npm run build:production && echo 'Production build ready for deployment'"
   },
   "dependencies": {
     "next": "15.3.2",

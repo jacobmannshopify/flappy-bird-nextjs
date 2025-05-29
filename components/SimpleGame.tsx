@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import PerformanceMonitor from './PerformanceMonitor';
+import ProductionPerformanceMonitor from './ProductionPerformanceMonitor';
+import SocialMenu from './SocialMenu';
 import { DayNightCycle } from '../lib/dayNightCycle';
 import { AchievementSystem } from '../lib/achievementSystem';
 import { Achievement } from '../types/achievements';
 import { PowerUp, ActivePowerUp, PowerUpType } from '../types/powerUps';
+import { MilestoneShare } from '../types/social';
 import { 
   POWER_UP_CONFIGS, 
   POWER_UP_SPAWN_CONFIG, 
@@ -76,6 +78,13 @@ const SimpleGame = () => {
   // Enhanced achievement system state
   const [achievementNotifications, setAchievementNotifications] = useState<AchievementNotificationUI[]>([]);
   const [achievementProgress, setAchievementProgress] = useState<{[key: string]: {progress: number, visible: boolean}}>({});
+  
+  // Social sharing state
+  const [showSocialMenu, setShowSocialMenu] = useState(false);
+  const [milestoneNotifications, setMilestoneNotifications] = useState<MilestoneShare[]>([]);
+  
+  // Production performance monitoring state
+  const [showProductionPerformanceMonitor, setShowProductionPerformanceMonitor] = useState(true);
   
   // Power-up system state
   const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
@@ -1193,7 +1202,7 @@ const SimpleGame = () => {
                 achievementSystemRef.current.updateScore(newScore);
               }
               
-              return modifiedScore;
+              return newScore;
             });
             playScoreSound();
             createScorePopup(pipe.x + PIPE_WIDTH / 2, pipe.gapY + PIPE_GAP / 2);
@@ -1859,6 +1868,9 @@ const SimpleGame = () => {
       } else if (e.code === 'KeyM') {
         e.preventDefault();
         toggleMusic();
+      } else if (e.code === 'KeyS') {
+        e.preventDefault();
+        setShowSocialMenu(!showSocialMenu);
       }
     };
 
@@ -1989,6 +2001,15 @@ const SimpleGame = () => {
     };
   }, []);
 
+  // Milestone notification handler
+  const handleMilestoneNotification = useCallback((milestone: MilestoneShare) => {
+    setMilestoneNotifications(prev => [...prev, milestone]);
+    // Auto-remove milestone notification after 5 seconds
+    setTimeout(() => {
+      setMilestoneNotifications(prev => prev.filter(m => m.id !== milestone.id));
+    }, 5000);
+  }, []);
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="text-center">
@@ -2038,15 +2059,15 @@ const SimpleGame = () => {
         />
         <div className="mt-4 text-gray-600">
           <p>Click canvas or press SPACE to flap</p>
-          <p>Press M to toggle music</p>
+          <p>Press M to toggle music • Press S for social sharing</p>
           <p>Score: {score}</p>
           
           <div className="flex flex-wrap gap-2 mt-3 justify-center">
             <button
-              onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
+              onClick={() => setShowProductionPerformanceMonitor(!showProductionPerformanceMonitor)}
               className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors"
             >
-              {showPerformanceMonitor ? 'Hide' : 'Show'} Performance
+              {showProductionPerformanceMonitor ? 'Hide' : 'Show'} Performance
             </button>
             
             <button
@@ -2058,6 +2079,13 @@ const SimpleGame = () => {
               }`}
             >
               🎵 Music {musicEnabled ? 'ON' : 'OFF'}
+            </button>
+            
+            <button
+              onClick={() => setShowSocialMenu(!showSocialMenu)}
+              className="px-3 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-800 rounded transition-colors"
+            >
+              🌟 Social & Share
             </button>
           </div>
           
@@ -2091,13 +2119,45 @@ const SimpleGame = () => {
       </div>
       
       {/* Performance Monitor */}
-      <PerformanceMonitor
+      <ProductionPerformanceMonitor
+        isVisible={showProductionPerformanceMonitor}
+        onToggle={() => setShowProductionPerformanceMonitor(!showProductionPerformanceMonitor)}
         particleCount={particles.length}
         gameObjects={pipes.length + (bird ? 1 : 0)}
         canvasWidth={CANVAS_WIDTH}
         canvasHeight={CANVAS_HEIGHT}
-        isVisible={showPerformanceMonitor}
       />
+      
+      {/* Social Menu */}
+      <SocialMenu
+        isVisible={showSocialMenu}
+        onClose={() => setShowSocialMenu(false)}
+        currentScore={score}
+        leaderboardEntries={[]} // TODO: Integrate with existing leaderboard system
+        achievements={achievementSystemRef.current?.getState().achievements || {}}
+        gameMode="Classic" // TODO: Integrate with game mode system
+        onMilestoneNotification={handleMilestoneNotification}
+      />
+      
+      {/* Milestone Notifications */}
+      {milestoneNotifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-40 space-y-2">
+          {milestoneNotifications.map(milestone => (
+            <div
+              key={milestone.id}
+              className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-3 rounded-lg shadow-lg animate-pulse"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="text-2xl">{milestone.icon}</span>
+                <div>
+                  <div className="font-bold text-sm">{milestone.title}</div>
+                  <div className="text-xs opacity-90">{milestone.description}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
