@@ -455,6 +455,8 @@ const Game: React.FC<GameProps> = ({
           gameTime={gameTime}
           fps={loopStats.fps}
           pipesCleared={stats.totalPipesCleared}
+          gameStarted={isGameRunning}
+          gameOver={false}
         />
       )}
 
