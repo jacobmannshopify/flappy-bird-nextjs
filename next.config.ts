@@ -6,11 +6,9 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 
 const nextConfig: NextConfig = {
   /* config options here */
-  experimental: {
-    turbo: {
-      // Turbopack configuration for better performance
-    },
-  },
+  // Removed experimental.turbo as it's deprecated in Next.js 15.3.2
+  // Turbopack is now stable and enabled by default when using --turbopack flag
+  
   // Optimize images and static assets
   images: {
     formats: ['image/webp', 'image/avif'],

@@ -3,9 +3,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import PerformanceMonitor from './PerformanceMonitor';
 import AchievementMenu from './AchievementMenu';
+import LeaderboardMenu from './LeaderboardMenu';
 import { DayNightCycle } from '../lib/dayNightCycle';
 import { AchievementSystem } from '../lib/achievementSystem';
+import { LeaderboardSystem } from '../lib/leaderboardSystem';
 import { Achievement } from '../types/achievements';
+import { GameStatistics } from '../types/leaderboard';
 import { PowerUp, ActivePowerUp, PowerUpType } from '../types/powerUps';
 import { 
   POWER_UP_CONFIGS, 
@@ -74,6 +77,7 @@ const SimpleGame = () => {
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.7);
   const [showAchievementMenu, setShowAchievementMenu] = useState(false);
+  const [showLeaderboardMenu, setShowLeaderboardMenu] = useState(false);
   
   // Enhanced achievement system state
   const [achievementNotifications, setAchievementNotifications] = useState<AchievementNotificationUI[]>([]);
@@ -118,6 +122,19 @@ const SimpleGame = () => {
   const lastTimeOfDayRef = useRef<string>('dawn');
   const musicInitializedRef = useRef<boolean>(false);
   const achievementSystemRef = useRef<AchievementSystem | null>(null);
+  const leaderboardSystemRef = useRef<LeaderboardSystem | null>(null);
+  
+  // Game statistics tracking for leaderboard
+  const gameStartTimeRef = useRef<number>(0);
+  const currentGameStatsRef = useRef<GameStatistics>({
+    playTime: 0,
+    pipesCleared: 0,
+    powerUpsCollected: { shield: 0, slowmo: 0, tiny: 0, magnet: 0, total: 0 },
+    averageScore: 0,
+    bestStreak: 0,
+    gamesPlayed: 1,
+    finalState: { birdY: 0, velocity: 0, activePowerUps: [] }
+  });
   
   // Pre-calculate grass positions to avoid expensive random generation every frame
   const grassPositions = useRef<{x: number, heights: number[]}[]>([]);
@@ -445,6 +462,13 @@ const SimpleGame = () => {
     }
   }, [playAchievementUnlockSound]);
 
+  // Initialize leaderboard system
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !leaderboardSystemRef.current) {
+      leaderboardSystemRef.current = new LeaderboardSystem();
+    }
+  }, []);
+
   // Power-up utility functions
   const generatePowerUpId = useCallback(() => {
     return Date.now().toString() + Math.random().toString(36).substring(2);
@@ -635,6 +659,10 @@ const SimpleGame = () => {
     if (achievementSystemRef.current) {
       achievementSystemRef.current.collectPowerUp(powerUp.type);
     }
+    
+    // Track power-up collection for leaderboard
+    currentGameStatsRef.current.powerUpsCollected[powerUp.type]++;
+    currentGameStatsRef.current.powerUpsCollected.total++;
     
     // Play collection sound
     playPowerUpSound(powerUp.type);
@@ -1035,6 +1063,11 @@ const SimpleGame = () => {
       if (achievementSystemRef.current) {
         achievementSystemRef.current.startSession();
       }
+      
+      // Initialize leaderboard session
+      if (leaderboardSystemRef.current) {
+        leaderboardSystemRef.current.startSession();
+      }
     }
     
     // Play flap sound
@@ -1066,6 +1099,18 @@ const SimpleGame = () => {
     setMagnetTrails([]); // Clear magnet trails
     lastPowerUpSpawnRef.current = 0;
     deathAnimationStartRef.current = null; // Reset death animation
+    
+    // Initialize leaderboard game tracking
+    gameStartTimeRef.current = Date.now();
+    currentGameStatsRef.current = {
+      playTime: 0,
+      pipesCleared: 0,
+      powerUpsCollected: { shield: 0, slowmo: 0, tiny: 0, magnet: 0, total: 0 },
+      averageScore: 0,
+      bestStreak: 0,
+      gamesPlayed: 1,
+      finalState: { birdY: 0, velocity: 0, activePowerUps: [] }
+    };
   }, []);
 
   // Game loop with integrated rendering
@@ -1102,6 +1147,28 @@ const SimpleGame = () => {
             // Track game end for achievements
             if (achievementSystemRef.current) {
               achievementSystemRef.current.endSession(score);
+            }
+            
+            // Submit score to leaderboard
+            if (leaderboardSystemRef.current && achievementSystemRef.current) {
+              currentGameStatsRef.current.playTime = Date.now() - gameStartTimeRef.current;
+              currentGameStatsRef.current.finalState = {
+                birdY: bird.y,
+                velocity: bird.velocity,
+                activePowerUps: activePowerUps.map(p => p.type)
+              };
+              
+              const achievementState = achievementSystemRef.current.getState();
+              leaderboardSystemRef.current.submitScore(
+                'Player', // TODO: Allow custom player names
+                score,
+                { ...currentGameStatsRef.current, collisionType: 'ground' },
+                {
+                  totalUnlocked: Object.values(achievementState.achievements).filter(a => a.unlocked).length,
+                  totalPoints: achievementState.totalAchievementPoints,
+                  completionPercentage: (Object.values(achievementState.achievements).filter(a => a.unlocked).length / Object.keys(achievementState.achievements).length) * 100
+                }
+              );
             }
             
             playCollisionSound();
@@ -1176,6 +1243,28 @@ const SimpleGame = () => {
               achievementSystemRef.current.endSession(score);
             }
             
+            // Submit score to leaderboard
+            if (leaderboardSystemRef.current && achievementSystemRef.current) {
+              currentGameStatsRef.current.playTime = Date.now() - gameStartTimeRef.current;
+              currentGameStatsRef.current.finalState = {
+                birdY: bird.y,
+                velocity: bird.velocity,
+                activePowerUps: activePowerUps.map(p => p.type)
+              };
+              
+              const achievementState = achievementSystemRef.current.getState();
+              leaderboardSystemRef.current.submitScore(
+                'Player', // TODO: Allow custom player names
+                score,
+                { ...currentGameStatsRef.current, collisionType: 'pipe' },
+                {
+                  totalUnlocked: Object.values(achievementState.achievements).filter(a => a.unlocked).length,
+                  totalPoints: achievementState.totalAchievementPoints,
+                  completionPercentage: (Object.values(achievementState.achievements).filter(a => a.unlocked).length / Object.keys(achievementState.achievements).length) * 100
+                }
+              );
+            }
+            
             playCollisionSound();
             if (isMobile) {
               triggerHapticFeedback('heavy');
@@ -1194,6 +1283,9 @@ const SimpleGame = () => {
               if (achievementSystemRef.current) {
                 achievementSystemRef.current.updateScore(newScore);
               }
+              
+              // Track pipe clearance for leaderboard
+              currentGameStatsRef.current.pipesCleared++;
               
               return newScore;
             });
@@ -1864,6 +1956,9 @@ const SimpleGame = () => {
       } else if (e.code === 'KeyA') {
         e.preventDefault();
         setShowAchievementMenu(!showAchievementMenu);
+      } else if (e.code === 'KeyL') {
+        e.preventDefault();
+        setShowLeaderboardMenu(!showLeaderboardMenu);
       }
     };
 
@@ -2043,7 +2138,7 @@ const SimpleGame = () => {
         />
         <div className="mt-4 text-gray-600">
           <p>Click canvas or press SPACE to flap</p>
-          <p>Press M to toggle music • Press A for achievements</p>
+          <p>Press M to toggle music • Press A for achievements • Press L for leaderboard</p>
           <p>Score: {score}</p>
           
           <div className="flex flex-wrap gap-2 mt-3 justify-center">
@@ -2070,6 +2165,13 @@ const SimpleGame = () => {
               className="px-3 py-1 text-xs bg-purple-200 hover:bg-purple-300 text-purple-800 rounded transition-colors"
             >
               🏆 Achievements
+            </button>
+            
+            <button
+              onClick={() => setShowLeaderboardMenu(true)}
+              className="px-3 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-800 rounded transition-colors"
+            >
+              🏆 Leaderboard
             </button>
           </div>
           
@@ -2117,6 +2219,24 @@ const SimpleGame = () => {
         totalAchievementPoints={achievementSystemRef.current?.getState().totalAchievementPoints || 0}
         isVisible={showAchievementMenu}
         onClose={() => setShowAchievementMenu(false)}
+      />
+      
+      {/* Leaderboard Menu */}
+      <LeaderboardMenu
+        entries={leaderboardSystemRef.current?.getLeaderboard() || []}
+        playerStats={leaderboardSystemRef.current?.getPlayerStats() || {
+          totalGamesPlayed: 0, totalPlayTime: 0, highScore: 0, averageScore: 0, totalScore: 0, bestRank: 0,
+          powerUpStats: { shield: { collected: 0, effectiveness: 0 }, slowmo: { collected: 0, effectiveness: 0 },
+          tiny: { collected: 0, effectiveness: 0 }, magnet: { collected: 0, effectiveness: 0 } },
+          achievementStats: { totalUnlocked: 0, totalPoints: 0, categoriesCompleted: 0, completionPercentage: 0 },
+          streakStats: { currentStreak: 0, bestStreak: 0, streakType: 'none' }
+        }}
+        sessionStats={leaderboardSystemRef.current?.getSessionStats() || {
+          sessionStartTime: Date.now(), gamesThisSession: 0, bestScoreThisSession: 0,
+          totalScoreThisSession: 0, powerUpsCollectedThisSession: 0, improvementFromLastSession: 0, sessionDuration: 0
+        }}
+        isVisible={showLeaderboardMenu}
+        onClose={() => setShowLeaderboardMenu(false)}
       />
     </div>
   );
