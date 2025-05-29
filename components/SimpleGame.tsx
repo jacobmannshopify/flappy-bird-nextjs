@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import PerformanceMonitor from './PerformanceMonitor';
+import AchievementMenu from './AchievementMenu';
 import { DayNightCycle } from '../lib/dayNightCycle';
 import { AchievementSystem } from '../lib/achievementSystem';
 import { Achievement } from '../types/achievements';
@@ -72,6 +73,7 @@ const SimpleGame = () => {
   const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(true);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.7);
+  const [showAchievementMenu, setShowAchievementMenu] = useState(false);
   
   // Enhanced achievement system state
   const [achievementNotifications, setAchievementNotifications] = useState<AchievementNotificationUI[]>([]);
@@ -1859,6 +1861,9 @@ const SimpleGame = () => {
       } else if (e.code === 'KeyM') {
         e.preventDefault();
         toggleMusic();
+      } else if (e.code === 'KeyA') {
+        e.preventDefault();
+        setShowAchievementMenu(!showAchievementMenu);
       }
     };
 
@@ -2038,7 +2043,7 @@ const SimpleGame = () => {
         />
         <div className="mt-4 text-gray-600">
           <p>Click canvas or press SPACE to flap</p>
-          <p>Press M to toggle music</p>
+          <p>Press M to toggle music • Press A for achievements</p>
           <p>Score: {score}</p>
           
           <div className="flex flex-wrap gap-2 mt-3 justify-center">
@@ -2058,6 +2063,13 @@ const SimpleGame = () => {
               }`}
             >
               🎵 Music {musicEnabled ? 'ON' : 'OFF'}
+            </button>
+            
+            <button
+              onClick={() => setShowAchievementMenu(true)}
+              className="px-3 py-1 text-xs bg-purple-200 hover:bg-purple-300 text-purple-800 rounded transition-colors"
+            >
+              🏆 Achievements
             </button>
           </div>
           
@@ -2097,6 +2109,14 @@ const SimpleGame = () => {
         canvasWidth={CANVAS_WIDTH}
         canvasHeight={CANVAS_HEIGHT}
         isVisible={showPerformanceMonitor}
+      />
+      
+      {/* Achievement Menu */}
+      <AchievementMenu
+        achievements={achievementSystemRef.current?.getState().achievements || {}}
+        totalAchievementPoints={achievementSystemRef.current?.getState().totalAchievementPoints || 0}
+        isVisible={showAchievementMenu}
+        onClose={() => setShowAchievementMenu(false)}
       />
     </div>
   );
